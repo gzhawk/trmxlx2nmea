@@ -89,15 +89,15 @@ nmea_ADGPS  = 20    #DGPS
 with open(xlx_path+xlx_name+nmea_tail, 'x') as nmea_log:
     for i in range(2, xlx_sht.max_row):
         msg = pynmea2.GGA('GP', 'GGA',
-                          (str(xlx_sht.cell(row=i, column=nmea_UTC).value),
-                           str(xlx_sht.cell(row=i, column=nmea_La).value), 'N',
-                           str(xlx_sht.cell(row=i, column=nmea_Lg).value), 'E',
-                           str(xlx_sht.cell(row=i, column=nmea_GQI).value),
-                           str(xlx_sht.cell(row=i, column=nmea_SV).value),
-                           str(xlx_sht.cell(row=i, column=nmea_HDOP).value),
-                           str(xlx_sht.cell(row=i, column=nmea_OH).value), 'M',
+                          (str(xlx_sht.cell(i, nmea_UTC).value),
+                           str(xlx_sht.cell(i, nmea_La).value), 'N',
+                           str(xlx_sht.cell(i, nmea_Lg).value), 'E',
+                           str(xlx_sht.cell(i, nmea_GQI).value),
+                           str(xlx_sht.cell(i, nmea_SV).value),
+                           str(xlx_sht.cell(i, nmea_HDOP).value),
+                           str(xlx_sht.cell(i, nmea_OH).value), 'M',
                            '0', 'M',
-                           str(xlx_sht.cell(row=i, column=nmea_ADGPS).value),
+                           str(xlx_sht.cell(i, nmea_ADGPS).value),
                            '0002'))
         nmea_log.write(str(msg))
         nmea_log.write('\n')
