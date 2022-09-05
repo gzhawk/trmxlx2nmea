@@ -61,35 +61,47 @@ Field	Meaning
 
 15	    The checksum data, always begins with *
 """
-
+xver = '0.1'
 import os
 import openpyxl
 import pynmea2
 
 xlx_path = 'C:\\Work\\Tools\\XLX2NMEA\\'
+#xlx_path = '/Users/Hawk/Downloads/'
 xlx_name = '22020831_sv_example'
 xlx_tail = '.xlsx'
-nmea_tail = '.log'
+nmea_tail = '.txt'
 
 xlx_wb = openpyxl.load_workbook(xlx_path+xlx_name+xlx_tail)
 xlx_sht = xlx_wb[xlx_wb.sheetnames[0]]
 
+nmea_UTC    = 4     #Time of Day (sec UTC)
+nmea_La     = 10    #Latitude (deg)
+nmea_Lg     = 9     #Longitude (deg)
+nmea_GQI    = 18    #Fix Type
+nmea_SV     = 18    #SVs (used) 
+nmea_HDOP   = 34    #HDOP 
+nmea_OH     = 11    #Altitude (m MSL)
+nmea_ADGPS  = 20    #DGPS
+#nmea_ADGPS  = 36    #Age of Corrections (sec)
+
 # Open a file for exclusive creation. If the file already exists, the operation fails.
 with open(xlx_path+xlx_name+nmea_tail, 'x') as nmea_log:
     for i in range(2, xlx_sht.max_row):
-        msg = pynmea2.GGA('GP', 'GGA', 
-                          (str(xlx_sht.cell(row=i, column=4).value),        # Time of Day (sec UTC)
-                           str(xlx_sht.cell(row=i, column=10).value), 'N',  # Latitude (deg)
-                           str(xlx_sht.cell(row=i, column=9).value), 'E',   # Longitude (deg)
-                           str(xlx_sht.cell(row=i, column=18).value),       # Fix Type
-                           str(xlx_sht.cell(row=i, column=41).value),       # SVs (used) 
-                           str(xlx_sht.cell(row=i, column=34).value),       # HDOP  
-                           str(xlx_sht.cell(row=i, column=11).value), 'M',  # Altitude (m MSL)
+        msg = pynmea2.GGA('GP', 'GGA',
+                          (str(xlx_sht.cell(row=i, column=nmea_UTC).value),
+                           str(xlx_sht.cell(row=i, column=nmea_La).value), 'N',
+                           str(xlx_sht.cell(row=i, column=nmea_Lg).value), 'E',
+                           str(xlx_sht.cell(row=i, column=nmea_GQI).value),
+                           str(xlx_sht.cell(row=i, column=nmea_SV).value),
+                           str(xlx_sht.cell(row=i, column=nmea_HDOP).value),
+                           str(xlx_sht.cell(row=i, column=nmea_OH).value), 'M',
                            '0', 'M',
-                           str(xlx_sht.cell(row=i, column=20).value),       # DGPS
-                           #xlx_sht.cell(row=i, column=36).value,           # Age of Corrections (sec) 
+                           str(xlx_sht.cell(row=i, column=nmea_ADGPS).value),
                            '0002'))
         nmea_log.write(str(msg))
         nmea_log.write('\n')
 
-print('Successful convert XLX into NMEA log (',xlx_wb.sheetnames[0],')')
+print('Version:',xver)
+print('Successful convert XLX (',xlx_sht.max_row,'lines) into NMEA log:')
+print(xlx_path+xlx_name+nmea_tail)
