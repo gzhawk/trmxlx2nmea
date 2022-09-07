@@ -46,7 +46,7 @@ Field	Meaning
         1021	                HP/G2 (GPS/GLONASS) 
 15	    The checksum data, always begins with *
 """
-xver = '0.1'
+xver = '0.2'
 import os
 import openpyxl
 import pynmea2
