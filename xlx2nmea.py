@@ -46,19 +46,19 @@ Field	Meaning
         1021	                HP/G2 (GPS/GLONASS) 
 15	    The checksum data, always begins with *
 """
-xver = '0.2'
+xver = '0.3'
 import os
 import openpyxl
 import pynmea2
 
-xlx_path = 'C:\\Work\\Tools\\XLX2NMEA\\'
-#xlx_path = '/Users/Hawk/Downloads/'
-xlx_name = 'small_example'
-xlx_tail = '.xlsx'
-nmea_tail = '.txt'
+xlx_path    = 'C:\\Work\\Tools\\XLX2NMEA\\'
+#xlx_path    = '/Users/Hawk/Downloads/'
+xlx_name    = 'small_example'
+xlx_tail    = '.xlsx'
+nmea_tail   = '.txt'
 
-xlx_wb = openpyxl.load_workbook(xlx_path+xlx_name+xlx_tail)
-xlx_sht = xlx_wb[xlx_wb.sheetnames[0]]
+xlx_wb      = openpyxl.load_workbook(xlx_path+xlx_name+xlx_tail)
+xlx_sht     = xlx_wb[xlx_wb.sheetnames[0]]
 
 nmea_UTC    = 4     #Time of Day (sec UTC)
 nmea_La     = 10    #Latitude (deg)
@@ -72,8 +72,10 @@ nmea_ADGPS  = 20    #DGPS
 
 # Open a file for exclusive creation. If the file already exists, the operation fails.
 with open(xlx_path+xlx_name+nmea_tail, 'x') as nmea_log:
-    for i in range(2, xlx_sht.max_row):
-        
+    msg = '\nVersion: ' + xver
+    nmea_log.write(str(msg))
+    print(msg)
+    for i in range(2, xlx_sht.max_row):        
         La_data = xlx_sht.cell(i, nmea_La).value
         if La_data > 0:
             La_dir = 'N'
@@ -88,8 +90,8 @@ with open(xlx_path+xlx_name+nmea_tail, 'x') as nmea_log:
             Lg_dir = 'W'
             Lg_data *= -1
         Lg_data = int(Lg_data)*100+round((Lg_data - int(Lg_data))*60,3)
-
-        msg = pynmea2.GGA('GP', 'GGA',
+        msg = '\n'
+        msg += pynmea2.GGA('GP', 'GGA',
                           (str(xlx_sht.cell(i, nmea_UTC).value),
                            str(La_data).zfill(4), La_dir,
                            str(Lg_data).zfill(5), Lg_dir,
@@ -100,9 +102,9 @@ with open(xlx_path+xlx_name+nmea_tail, 'x') as nmea_log:
                            '0.0', 'M',
                            str(xlx_sht.cell(i, nmea_ADGPS).value),
                            '0002'))
-        nmea_log.write(str(msg))
-        nmea_log.write('\n')
+        nmea_log.write(msg)
 
-print('Version:',xver)
-print('Successful convert XLX (',xlx_sht.max_row-1,'lines) into NMEA log:')
-print(xlx_path+xlx_name+nmea_tail)
+msg = '\nSuccessful convert XLX (' + str(xlx_sht.max_row-1) + 'lines) into NMEA log:'
+msg += (xlx_path+xlx_name+nmea_tail)
+nmea_log.write(msg)
+print(msg)
