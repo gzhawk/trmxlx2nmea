@@ -13,4 +13,4 @@ currently it just a draft version, not tested by those tools yet.
 
 . save xlx as xlsx (openpyxl can only parse xlsx format)
 
-. run it (xlx2nmea.exe)
+. run it (xlx2nmea.py)
