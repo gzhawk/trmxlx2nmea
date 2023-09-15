@@ -12,4 +12,4 @@ for our Trimlbe autonomy B5000 unit, it can only output xlx file, this script ma
 
 . save xlx as xlsx (openpyxl can only parse xlsx format)
 
-. run it (xlx2nmea.py)
+. run it (directly run xlx2nmea.py, or, you may use "pyinstaller --onefile" to generate EXE file, the EXE file was too bug to be put on GitHub)
