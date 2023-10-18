@@ -1,5 +1,5 @@
 
-xver = '1.B.3'
+xver = '1.B.4'
 import os
 import openpyxl
 from datetime import datetime
@@ -17,6 +17,7 @@ DR_GNSS_LINE= 3
 GGA_1_DR    = 'Time of Week (sec GPS)'
 GGA_1_GNSS  = GGA_1_DR
 GGA_2_DR    = 'Latitude (deg)'
+GGA_2_GNSS  = GGA_2_DR
 GGA_4_DR    = 'Longitude (deg)'
 GGA_6_GNSS  = 'Fix Type'
 GGA_7_GNSS  = '# SVs (used)'
@@ -69,6 +70,9 @@ GSV_SUBELEM_NUM=7
 # sv number, sv used col location, CNO1 name index, CNO2 name index
 GSV_LIST_SUBELEM_NUM = 4
 
+# debug output
+DBG_PRT = 0
+
 def GenChkSum(Msg,cm):
     cs = 0
     for i in Msg:
@@ -81,21 +85,31 @@ def GenNMEAMsg(*itemList):
     l = len(itemList)
     if not l:
         return ''
+
+    dbg_flag = itemList[0]
+    time_tag = itemList[1]
     
     msg = ''
+    # skip the dbg_flag and time_tag
+    l -= 2
     for i in range(l):
-        msg += itemList[i]
+        msg += itemList[2+i]
 
     cs = GenChkSum(bytes(msg,'utf-8'), l%2)
     cs = hex(cs).upper()
     cs = str(cs)[2:].zfill(2)
 
-    msg = ''
+    if dbg_flag:
+        msg = str(time_tag)
+    else:
+        msg = ''
+
+    # skip the dbg_flag and time_tag
     for i in range(l):
         if not i:
-            msg += '$' + itemList[i]
+            msg += '$' + itemList[2+i]
         else:
-            msg += ',' + itemList[i]
+            msg += ',' + itemList[2+i]
     
     return msg + '*' + cs
 
@@ -110,10 +124,14 @@ def xlsx2sht(p_dr, p_gnss):
             sht_dr = 0
        
         if p_gnss != '':
-            print(f'loading {p_gnss}...')
-            wb_gnss = openpyxl.load_workbook(p_gnss)
-            sht_gnss= wb_gnss[wb_gnss.sheetnames[0]]
-            print(f'done')
+            if p_dr == p_gnss:
+                sht_gnss = sht_dr
+                print('skip the second file')
+            else:
+                print(f'loading {p_gnss}...')
+                wb_gnss = openpyxl.load_workbook(p_gnss)
+                sht_gnss= wb_gnss[wb_gnss.sheetnames[0]]
+                print(f'done')
         else:
             sht_gnss = 0
 
@@ -336,7 +354,7 @@ def msgLstGSV(gsv_type, svInfoLst, msg_num, msg_index, elem_num, index_start, sv
         else:
             gsv_list_tail += str(svInfoLst[index_start+i]) + ','
 
-    return GenNMEAMsg(gsv_type + 'GSV', str(msg_num), str(msg_index), str(sv_total), gsv_list_tail)
+    return GenNMEAMsg(DBG_PRT,'',gsv_type + 'GSV', str(msg_num), str(msg_index), str(sv_total), gsv_list_tail)
 
 def msgLstWrNMEA(msg_list,nmea_log):
     if msg_list:
@@ -358,7 +376,7 @@ def msgGSA(gsa_title_list, gsv_title_list, sht_row, sht_gnss):
     
     sv_total = int(len(svInfoLst)/GSV_SUBELEM_NUM)
     for i in range(sv_total):
-        msg.append(GenNMEAMsg('GNGSA', 'A', gsa2, str(svInfoLst[i*GSV_SUBELEM_NUM]), gsa4, gsa5, gsa6))
+        msg.append(GenNMEAMsg(DBG_PRT,'','GNGSA', 'A', gsa2, str(svInfoLst[i*GSV_SUBELEM_NUM]), gsa4, gsa5, gsa6))
 
     return msg
 
@@ -462,6 +480,11 @@ def getIndexNameGGA(sht_dr, sht_gnss):
     if GGA_x == GGA_MAX:
         return []
     ggaList.append(GGA_x) # 11
+    
+    GGA_x, GGA_MAX = getIndexFrmName(sht_gnss,GGA_2_GNSS,1)
+    if GGA_x == GGA_MAX:
+        return []
+    ggaList.append(GGA_x) # 12
 
     return ggaList
 
@@ -491,8 +514,11 @@ def getIndexNameGSA(sht_gnss):
     return gsaList
 
 def isValidFileGGA(sht_dr, sht_gnss, nameList):
+    dr_lat = 0
+    gnss_lat = 0
     for i in range(2, DR_GNSS_LINE):
         dr_time = sht_dr.cell(i,nameList[1]).value
+        dr_lat = sht_dr.cell(i,nameList[3]).value
         # I judge the DR and GNSS xlx should coming from
         # the same TitanINS HIPPO log by checking if the 
         # first DR_GNSS_LINE 'Time of Week' are the same xlsx index
@@ -502,9 +528,18 @@ def isValidFileGGA(sht_dr, sht_gnss, nameList):
         # they different from the very beginning
         # as DR output is 20Hz, and GNSS output is 10Hz
         gnss_time = sht_gnss.cell(i,nameList[2]).value
+        gnss_lat = sht_gnss.cell(i,nameList[12]).value
         if gnss_time != dr_time: 
-            print(f'{i}: DR({nameList[1]})-{dr_time}, GNSS({nameList[2]})-{gnss_time}')
+            if DBG_PRT:
+                print(f'{i}: DR({nameList[1]})-{dr_time}, GNSS({nameList[2]})-{gnss_time}')
             return False
+    # all the GNSS related data are coming from GNSS.xlx
+    # under the same time tag, the lat/lon/alt may different with DR.xls even it's TitanINS
+    # which means, the GGA lat/lon/alt may have different value than RMC
+    # because, if the user position (lever arm) output (DR.xlx) is not at antenna (GNSS.xlx) 
+    # it's normal, but give a prompt to avoid confusion
+    if gnss_lat != dr_lat:
+        print(f'lever arm (DR) position, not at antenna (GNSS)')
     return True
 
 def msgGGA(sht_dr, sht_gnss, nameList, dr_row, gnss_row):
@@ -523,7 +558,8 @@ def msgGGA(sht_dr, sht_gnss, nameList, dr_row, gnss_row):
                                        nameList[7], nameList[10], sht_gnss)
     if not t_match:
         gnss_time_of_week = sht_gnss.cell(gnss_r,nameList[2]).value
-        # print(f'({dr_row}) DR time tage ({time_tag}) mismatch with GNSS time{gnss_time_of_week}')
+        if DBG_PRT:
+            print(f'Mismatch: DR-{dr_row}:{time_tag} GNSS-{gnss_r}:{gnss_time_of_week}')
         if time_tag > gnss_time_of_week:
             # only when DR xlx time tag is larger than GNSS time tag
             # we need to keep searching the rest of GNSS xlx for the matching time tag
@@ -534,7 +570,8 @@ def msgGGA(sht_dr, sht_gnss, nameList, dr_row, gnss_row):
                                        nameList[2], nameList[5], nameList[6], 
                                        nameList[7], nameList[10], sht_gnss)
                 if t_match:
-                    #print(f'DR time tag found at GNSS row {gnss_i}')
+                    if DBG_PRT:
+                        print(f'Match: DR-{dr_row} GNSS-{gnss_i}')
                     gnss_r = gnss_i + 1
                     break
     else:
@@ -582,7 +619,7 @@ def msgGGA(sht_dr, sht_gnss, nameList, dr_row, gnss_row):
             gga11= '0'
             gga12 = 'M'
 
-    return gnss_r, t_match, GenNMEAMsg('GPGGA',
+    return gnss_r, t_match, GenNMEAMsg(DBG_PRT,time_tag,'GPGGA',
                                    gga1,gga2,gga3,gga4,gga5,
                                    gga6,gga7,gga8,
                                    gga9, gga10, gga11,gga12,
@@ -660,7 +697,7 @@ def msgRMC(sht_gnss, nameList, dr_row):
     rmc11 = ''# Magnetic direction
     rmc12 = ''# Mode indication
     
-    return GenNMEAMsg('GNRMC',rmc1,rmc2,rmc3,rmc4,rmc5,rmc6,rmc7,rmc8,rmc9,rmc10,rmc11,rmc12)
+    return GenNMEAMsg(DBG_PRT,time_tag,'GNRMC',rmc1,rmc2,rmc3,rmc4,rmc5,rmc6,rmc7,rmc8,rmc9,rmc10,rmc11,rmc12)
 
 def getIndexNameGGAPlus(sht_dr, sht_gnss):# 0:error,1:ok,2:gnss only
     nameList = getIndexNameGGA(sht_dr, sht_gnss)
@@ -671,9 +708,7 @@ def getIndexNameGGAPlus(sht_dr, sht_gnss):# 0:error,1:ok,2:gnss only
         print('done')
     
     if not isValidFileGGA(sht_dr, sht_gnss, nameList):
-        print(f'DR and GNSS file may not coming from the same TitanINS log'+
-               '\nor they coming from MBDR log'+
-               '\nthe output will only use GNSS file as primary file')
+        print(f'the output will only use GNSS file information')
         nameList = getIndexNameGGA(sht_gnss, sht_gnss)
         return 2,nameList
     else:
@@ -841,8 +876,11 @@ def sht2nmea(p_dr, p_gnss, n_type):
                 if l_gsa_name == []:
                     print('index name error')
                     return
-
-    fl_name = 'NMEA-v' + str(xver) + datetime.now().strftime('-%Y-%b-%d_%H.%M.%S.txt')
+    
+    if DBG_PRT:
+        fl_name = 'Debug-v' + str(xver) + datetime.now().strftime('-%Y-%b-%d_%H.%M.%S.txt')
+    else: 
+        fl_name = 'NMEA-v' + str(xver) + datetime.now().strftime('-%Y-%b-%d_%H.%M.%S.txt')
     with open(fl_name, 'wt') as nmea_log:
         print(f'{fl_name} created')
 
@@ -893,16 +931,30 @@ def sht2nmea(p_dr, p_gnss, n_type):
 print('\nXLSX to NMEA Version:',xver)
 while 1:
     usrinput = input('\nDR.xlsx/GNSS.xlsx,GNSS.xlsx,nmea_type(GGA/RMC/GSV/GSA)'+
-                     '\n(GGA is default option: RMC or GSV or RMC+GSV ...)\n'+
+                     '\n(nmea_type: GGA or RMC or GSV or RMC+GSV ...)'+
+                     '\n(GGA is default option)\n'+
                      '\n[e to exit]: ')
     i = usrinput.rfind(',')
     j = usrinput.find(',')
     if -1 != i and -1 != j and i != j:
         path_dr = usrinput.partition(',')[0]
-        path_gnss = usrinput.partition(',')[2]
-        path_gnss = path_gnss.partition(',')[0]
-        nmea_type = usrinput.partition(',')[2]
-        nmea_type = nmea_type.partition(',')[2]
+        tmp     = usrinput.partition(',')[2]
+        path_gnss = tmp.partition(',')[0]
+        
+        tmp = tmp.partition(',')[2]
+        i = tmp.find(',')
+        if -1 == i:
+            nmea_type = tmp
+            DBG_PRT = 0
+        else:
+            nmea_type = tmp.partition(',')[0]
+            dbg_flag = tmp.partition(',')[2] 
+            if 'd' == dbg_flag:
+                DBG_PRT = 1
+                print(f'\n---debug mode---\n')
+            else:
+                DBG_PRT = 0
+                print(f'unaccepted debug flag [{dbg_flag}]')
         sht2nmea(path_dr, path_gnss, nmea_type)
     if 'e' == usrinput:
         # when the file is large, it take quite some time to exit the program
