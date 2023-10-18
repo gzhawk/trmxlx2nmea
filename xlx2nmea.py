@@ -1,5 +1,5 @@
 
-xver = '1.B.2'
+xver = '1.B.3'
 import os
 import openpyxl
 from datetime import datetime
@@ -63,6 +63,11 @@ QZSS_END    =200
 BEIDOU_START=201
 BEIDOU_END  =246
 MAX_SVNUM_LINE= 3
+
+# sv number, elev, amiz, cno1 value, cno1, cno2 value, cno2
+GSV_SUBELEM_NUM=7
+# sv number, sv used col location, CNO1 name index, CNO2 name index
+GSV_LIST_SUBELEM_NUM = 4
 
 def GenChkSum(Msg,cm):
     cs = 0
@@ -154,6 +159,7 @@ def getPos(isLat, Pos):
             else:
                 P_dir = 'E'
         else:
+            Pos = abs(Pos)
             if isLat:
                 P_dir = 'S'
             else:
@@ -263,20 +269,19 @@ def svInfoLstGSV(gsv_title_list,sht_row,sht_gnss):
     if not l:
         return []
 
-    gsv_used_list_elem = 4#sv number, sv used col location, CNO1 name index, CNO2 name index
     gsv_used_list = []
     cno_name_index_max = len(CNO_NAME_List)
 
     """
     XLX has 3 type:
-    1. SVused | CNO | Azim | Elev
-    2. SVused | CNO (name1) | Azim | Elev
+    1. SVused |             CNO           | Azim | Elev
+    2. SVused |         CNO (name1)       | Azim | Elev
     3. SVused | CNO (name1) | CNO (name2) | Azim | Elev
 
     GSV format (my version):
     SV number, Elev, Azim, SNR1, name1, SNR2, name2
     """
-    for i in range(0,l,gsv_used_list_elem):
+    for i in range(0,l,GSV_LIST_SUBELEM_NUM):
         isUsed = sht_gnss.cell(sht_row, gsv_title_list[i+1]).value
         if not isNA(isUsed) and isUsed:
             gsv_used_list.append(gsv_title_list[i]) # SV number
@@ -324,54 +329,14 @@ def svInfoLstGSV(gsv_title_list,sht_row,sht_gnss):
     return gsv_used_list
 
 def msgLstGSV(gsv_type, svInfoLst, msg_num, msg_index, elem_num, index_start, sv_total):
-    if elem_num == 1:
-        return GenNMEAMsg(gsv_type + 'GSV', str(msg_num), str(msg_index), str(sv_total), 
-                                                                           str(svInfoLst[index_start]), 
-                                                                           str(svInfoLst[index_start+1]), 
-                                                                           str(svInfoLst[index_start+2]), 
-                                                                           str(svInfoLst[index_start+3]),
-                                                                           str(svInfoLst[index_start+4]), 
-                                                                           str(svInfoLst[index_start+5]), 
-                                                                           str(svInfoLst[index_start+6]))
-    elif elem_num == 2:
-        return GenNMEAMsg(gsv_type + 'GSV', str(msg_num), str(msg_index), str(sv_total), 
-                                                                           str(svInfoLst[index_start]), 
-                                                                           str(svInfoLst[index_start+1]), 
-                                                                           str(svInfoLst[index_start+2]), 
-                                                                           str(svInfoLst[index_start+3]), 
-                                                                           str(svInfoLst[index_start+4]), 
-                                                                           str(svInfoLst[index_start+5]), 
-                                                                           str(svInfoLst[index_start+6]), 
-                                                                           str(svInfoLst[index_start+7]),
-                                                                           str(svInfoLst[index_start+8]), 
-                                                                           str(svInfoLst[index_start+9]), 
-                                                                           str(svInfoLst[index_start+10]), 
-                                                                           str(svInfoLst[index_start+11]),
-                                                                           str(svInfoLst[index_start+12]), 
-                                                                           str(svInfoLst[index_start+13]))
-    elif elem_num == 3:
-        return GenNMEAMsg(gsv_type + 'GSV', str(msg_num), str(msg_index), str(sv_total), 
-                                                                           str(svInfoLst[index_start]), 
-                                                                           str(svInfoLst[index_start+1]), 
-                                                                           str(svInfoLst[index_start+2]), 
-                                                                           str(svInfoLst[index_start+3]), 
-                                                                           str(svInfoLst[index_start+4]), 
-                                                                           str(svInfoLst[index_start+5]), 
-                                                                           str(svInfoLst[index_start+6]), 
-                                                                           str(svInfoLst[index_start+7]), 
-                                                                           str(svInfoLst[index_start+8]), 
-                                                                           str(svInfoLst[index_start+9]), 
-                                                                           str(svInfoLst[index_start+10]), 
-                                                                           str(svInfoLst[index_start+11]), 
-                                                                           str(svInfoLst[index_start+12]), 
-                                                                           str(svInfoLst[index_start+13]), 
-                                                                           str(svInfoLst[index_start+14]), 
-                                                                           str(svInfoLst[index_start+15]), 
-                                                                           str(svInfoLst[index_start+16]), 
-                                                                           str(svInfoLst[index_start+17]), 
-                                                                           str(svInfoLst[index_start+18]), 
-                                                                           str(svInfoLst[index_start+19]), 
-                                                                           str(svInfoLst[index_start+20]))
+    gsv_list_tail = ''
+    for i in range(elem_num*GSV_SUBELEM_NUM):
+        if i == (elem_num*GSV_SUBELEM_NUM - 1):
+            gsv_list_tail += str(svInfoLst[index_start+i])
+        else:
+            gsv_list_tail += str(svInfoLst[index_start+i]) + ','
+
+    return GenNMEAMsg(gsv_type + 'GSV', str(msg_num), str(msg_index), str(sv_total), gsv_list_tail)
 
 def msgLstWrNMEA(msg_list,nmea_log):
     if msg_list:
@@ -385,16 +350,15 @@ def msgGSA(gsa_title_list, gsv_title_list, sht_row, sht_gnss):
     if svInfoLst == []:
         return []
 
-    gsv_elem_num = 7#sv number, elev, amiz, cno1 value, cno1, cno2 value, cno2
     msg = []
     gsa2 = str(sht_gnss.cell(sht_row, gsa_title_list[0]).value)
     gsa4 = str(sht_gnss.cell(sht_row, gsa_title_list[1]).value)
     gsa5 = str(sht_gnss.cell(sht_row, gsa_title_list[2]).value)
     gsa6 = str(sht_gnss.cell(sht_row, gsa_title_list[3]).value)
     
-    sv_total = int(len(svInfoLst)/gsv_elem_num)
+    sv_total = int(len(svInfoLst)/GSV_SUBELEM_NUM)
     for i in range(sv_total):
-        msg.append(GenNMEAMsg('GNGSA', 'A', gsa2, str(svInfoLst[i*gsv_elem_num]), gsa4, gsa5, gsa6))
+        msg.append(GenNMEAMsg('GNGSA', 'A', gsa2, str(svInfoLst[i*GSV_SUBELEM_NUM]), gsa4, gsa5, gsa6))
 
     return msg
 
@@ -403,9 +367,8 @@ def msgGSV(gsv_type, gsv_title_list, sht_row, sht_gnss):
     if svInfoLst == []:
         return []
     
-    gsv_elem_num = 7#sv number, elev, amiz, cno1 value, cno1 name, cno2 value, cno2 name
     msgList = []
-    sv_total = int(len(svInfoLst)/gsv_elem_num)
+    sv_total = int(len(svInfoLst)/GSV_SUBELEM_NUM)
     sv_rest = int(sv_total%MAX_SVNUM_LINE)
     sv_lines = int(sv_total/MAX_SVNUM_LINE)
     msg_num = 1
@@ -418,11 +381,11 @@ def msgGSV(gsv_type, gsv_title_list, sht_row, sht_gnss):
             msg_num = sv_lines
 
         for i in range(sv_lines):
-            msgList.append(msgLstGSV(gsv_type, svInfoLst, msg_num, i+1, MAX_SVNUM_LINE, i*gsv_elem_num*MAX_SVNUM_LINE, sv_total))
+            msgList.append(msgLstGSV(gsv_type, svInfoLst, msg_num, i+1, MAX_SVNUM_LINE, i*GSV_SUBELEM_NUM*MAX_SVNUM_LINE, sv_total))
         
         if sv_rest:
             i += 1
-            msgList.append(msgLstGSV(gsv_type, svInfoLst, msg_num, i+1, sv_rest, i*gsv_elem_num*MAX_SVNUM_LINE, sv_total))
+            msgList.append(msgLstGSV(gsv_type, svInfoLst, msg_num, i+1, sv_rest, i*GSV_SUBELEM_NUM*MAX_SVNUM_LINE, sv_total))
 
     return msgList
 
@@ -531,10 +494,13 @@ def isValidFileGGA(sht_dr, sht_gnss, nameList):
     for i in range(2, DR_GNSS_LINE):
         dr_time = sht_dr.cell(i,nameList[1]).value
         # I judge the DR and GNSS xlx should coming from
-        # the same HIPPO log by checking if the 
-        # first 10 'Time of Week' are the same xlsx index
+        # the same TitanINS HIPPO log by checking if the 
+        # first DR_GNSS_LINE 'Time of Week' are the same xlsx index
         # it may mismatch after a while (e.g. '=NA()'/'#N/A'),
         # then GNSS may have less information than DR
+        # when there the DR and GNSS is coming from MBDR log
+        # they different from the very beginning
+        # as DR output is 20Hz, and GNSS output is 10Hz
         gnss_time = sht_gnss.cell(i,nameList[2]).value
         if gnss_time != dr_time: 
             print(f'{i}: DR({nameList[1]})-{dr_time}, GNSS({nameList[2]})-{gnss_time}')
@@ -557,7 +523,7 @@ def msgGGA(sht_dr, sht_gnss, nameList, dr_row, gnss_row):
                                        nameList[7], nameList[10], sht_gnss)
     if not t_match:
         gnss_time_of_week = sht_gnss.cell(gnss_r,nameList[2]).value
-        print(f'({dr_row}) DR time tage ({time_tag}) mismatch with GNSS time{gnss_time_of_week}')
+        # print(f'({dr_row}) DR time tage ({time_tag}) mismatch with GNSS time{gnss_time_of_week}')
         if time_tag > gnss_time_of_week:
             # only when DR xlx time tag is larger than GNSS time tag
             # we need to keep searching the rest of GNSS xlx for the matching time tag
@@ -568,13 +534,15 @@ def msgGGA(sht_dr, sht_gnss, nameList, dr_row, gnss_row):
                                        nameList[2], nameList[5], nameList[6], 
                                        nameList[7], nameList[10], sht_gnss)
                 if t_match:
-                    print(f'DR time tag found at GNSS row {gnss_i}')
+                    #print(f'DR time tag found at GNSS row {gnss_i}')
                     gnss_r = gnss_i + 1
                     break
     else:
         gnss_r = gnss_r + 1
 
-    # MSL vs WGS handling
+    # MSL vs WGS handling:
+    #  9: Altitude (m MSL) [we may use "Altitude (m WGS-84)" here, and set item 11 to "0"]
+    # 11: Altitude (m WGS-84) - Altitude (m MSL) [we may set here to "0", and use "Altitude (m WGS-84)" at item 9] 
     if nameList[8] and nameList[9]:
         gga9 = sht_dr.cell(dr_row, nameList[8]).value
         gga11 = sht_dr.cell(dr_row, nameList[9]).value
@@ -705,7 +673,7 @@ def getIndexNameGGAPlus(sht_dr, sht_gnss):# 0:error,1:ok,2:gnss only
     if not isValidFileGGA(sht_dr, sht_gnss, nameList):
         print(f'DR and GNSS file may not coming from the same TitanINS log'+
                '\nor they coming from MBDR log'+
-               '\nthe output will only use GNSS file as reference')
+               '\nthe output will only use GNSS file as primary file')
         nameList = getIndexNameGGA(sht_gnss, sht_gnss)
         return 2,nameList
     else:
@@ -757,39 +725,38 @@ def validType(inputT):
        return True
     return False
 
-def validPath(p_dr, p_gnss, l_type):
+def validPath(p_dr, p_gnss):
     if p_dr == '' and p_gnss == '':
         return False
-    for inputT in l_type:
-        if inputT == 'GGA':
-            if p_dr == '' or p_gnss == '':
-                return False
-        else:
-            if p_gnss == '':
-                return False
     return True
 
 def getTypeList(n_type):
     tList = []
+
+    #check the first option
     tmpL = n_type.partition('+')
     if not validType(tmpL[0]):
-        print(f'{tmpL[0]} invalid')
+        print(f'invalid input: {tmpL[0]}')
         return []
     tList.append(tmpL[0])
     tmp = tmpL[2]
+    
+    #check the rest option
     while tmp != '':
         tmpL = tmp.partition('+')
         if not validType(tmpL[0]):
-            print(f'{tmpL[0]} invalid')
+            print(f'invalid input: {tmpL[0]}')
             return []
         tList.append(tmpL[0])
         tmp = tmpL[2]
+       
+    #check the duplication
     l = len(tList)
     if l > 1:
         for i in range(l):
             for j in range(l):
                 if tList[i] == tList[j] and i != j:
-                    print(f'{tList[i]} duplicated')
+                    print(f'duplicated input: {tList[i]}')
                     return []
     return tList
 
@@ -799,76 +766,36 @@ def findType(iType, lType):
             return True
     return False
 
+def internalGSVandGSA(msg,gsa_l,gsv_type,gsv_list,sht_row,sht_g):
+    gsv_msg = msgGSV(gsv_type, gsv_list, sht_row, sht_g)
+    if gsv_msg != [] and gsv_msg:
+        for m in gsv_msg:
+            msg.append(m)
+        gsa_msg = msgGSA(gsa_l, gsv_list, sht_row, sht_g)
+        if gsa_msg != []:
+            for m in gsa_msg:
+                msg.append(m)
+
 def msgGSVandGSA(msg,gsa_l,gsv_gps_l,gsv_glonass_l,gsv_sbas_l,gsv_galileo_l,gsv_qzss_l,gsv_beidou_l,sht_row,sht_g):
-    gsv_msg = msgGSV('GP', gsv_gps_l, sht_row, sht_g)
-    if gsv_msg != [] and gsv_msg:
-        for m in gsv_msg:
-            msg.append(m)
-        gsa_msg = msgGSA(gsa_l, gsv_gps_l, sht_row, sht_g)
-        if gsa_msg != []:
-            for m in gsa_msg:
-                msg.append(m)
-    
-    gsv_msg = msgGSV('GL', gsv_glonass_l, sht_row, sht_g)
-    if gsv_msg != [] and gsv_msg:
-        for m in gsv_msg:
-            msg.append(m)
-        gsa_msg = msgGSA(gsa_l, gsv_glonass_l, sht_row, sht_g)
-        if gsa_msg != []:
-            for m in gsa_msg:
-                msg.append(m)
 
-    gsv_msg = msgGSV('GP', gsv_sbas_l, sht_row, sht_g)
-    if gsv_msg != [] and gsv_msg:
-        for m in gsv_msg:
-            msg.append(m)
-        gsa_msg = msgGSA(gsa_l, gsv_sbas_l, sht_row, sht_g)
-        if gsa_msg != []:
-            for m in gsa_msg:
-                msg.append(m)
-
-    gsv_msg = msgGSV('GA', gsv_galileo_l, sht_row, sht_g)
-    if gsv_msg != [] and gsv_msg:
-        for m in gsv_msg:
-            msg.append(m)
-        gsa_msg = msgGSA(gsa_l, gsv_galileo_l, sht_row, sht_g)
-        if gsa_msg != []:
-            for m in gsa_msg:
-                msg.append(m)
-
-    gsv_msg = msgGSV('GQ', gsv_qzss_l, sht_row, sht_g)
-    if gsv_msg != [] and gsv_msg:
-        for m in gsv_msg:
-            msg.append(m)
-        gsa_msg = msgGSA(gsa_l, gsv_qzss_l, sht_row, sht_g)
-        if gsa_msg != []:
-            for m in gsa_msg:
-                msg.append(m)
-
-    gsv_msg = msgGSV('GB', gsv_beidou_l, sht_row, sht_g)
-    if gsv_msg != [] and gsv_msg:
-        for m in gsv_msg:
-            msg.append(m)
-        gsa_msg = msgGSA(gsa_l, gsv_beidou_l, sht_row, sht_g)
-        if gsa_msg != []:
-            for m in gsa_msg:
-                msg.append(m)
+    internalGSVandGSA(msg,gsa_l,'GP',gsv_gps_l,sht_row,sht_g)
+    internalGSVandGSA(msg,gsa_l,'GP',gsv_sbas_l,sht_row,sht_g)
+    internalGSVandGSA(msg,gsa_l,'GL',gsv_glonass_l,sht_row,sht_g)
+    internalGSVandGSA(msg,gsa_l,'GA',gsv_galileo_l,sht_row,sht_g)
+    internalGSVandGSA(msg,gsa_l,'GQ',gsv_qzss_l,sht_row,sht_g)
+    internalGSVandGSA(msg,gsa_l,'GB',gsv_beidou_l,sht_row,sht_g)
 
 def sht2nmea(p_dr, p_gnss, n_type):
     tList = getTypeList(n_type)
     if tList == []:
-        print(f'please input: GGA/RMC/GSA/GSV or GGA+RMC,RMC+...')
         return
     
-    if not validPath(p_dr, p_gnss, tList):
+    if not validPath(p_dr, p_gnss):
         print(f'please input necessary XLSX file')
         return
 
-    if not findType('GGA', tList):
-        sht_dr, sht_gnss = xlsx2sht('', p_gnss)
-    else:
-        sht_dr, sht_gnss = xlsx2sht(p_dr, p_gnss)
-    if not sht_dr and not sht_gnss:
+    sht_dr, sht_gnss = xlsx2sht(p_dr, p_gnss)
+    if not sht_dr or not sht_gnss:
         return
 
     type_num = len(tList)
@@ -883,13 +810,16 @@ def sht2nmea(p_dr, p_gnss, n_type):
     l_beidou_name=[]
     tmp_sht = sht_dr
     gnss_ret = 1# 0:error,1:ok,2:gnss only
+
+    # make GGA default option
+    gnss_ret,l_gga_name = getIndexNameGGAPlus(sht_dr, sht_gnss)
+    if not gnss_ret:
+        return
+    elif gnss_ret == 2:
+        tmp_sht = sht_gnss
+
+    # check other options
     for i in range(type_num):
-        if tList[i] == 'GGA':
-            gnss_ret,l_gga_name = getIndexNameGGAPlus(sht_dr, sht_gnss)
-            if not gnss_ret:
-                return
-            elif gnss_ret == 2:
-                tmp_sht = sht_gnss
         if tList[i] == 'RMC':
             l_rmc_name = getIndexNameRMC(sht_gnss)
             if l_rmc_name == []:
@@ -912,24 +842,17 @@ def sht2nmea(p_dr, p_gnss, n_type):
                     print('index name error')
                     return
 
-    if  type_num == 1:
-        fl_name = tList[0]
-    else:
-        fl_name = 'NMEA'
-    fl_name += '-v' + str(xver) + datetime.now().strftime('-%Y-%b-%d_%H.%M.%S.txt')
-
+    fl_name = 'NMEA-v' + str(xver) + datetime.now().strftime('-%Y-%b-%d_%H.%M.%S.txt')
     with open(fl_name, 'wt') as nmea_log:
         print(f'{fl_name} created')
 
-        gnss_row = 2
+        gnss_row = 2 # skip the title row
         msg = []
-        gga_match = 1
+        gga_match = 0
 
-        if not findType('GGA', tList):
-            max_row = sht_gnss.max_row
-        else:
-            max_row = tmp_sht.max_row
+        max_row = tmp_sht.max_row
 
+        # skip the title row, so start from 2
         # max_row is the row number, the "for loop" index should be plus 1
         for sht_row in range(2, max_row+1): 
             print(f'process: {round(((sht_row+1)/max_row)*100,1)}%', end= '\r')
@@ -940,7 +863,7 @@ def sht2nmea(p_dr, p_gnss, n_type):
 
             if gga_match:
                 if l_rmc_name != []:
-                    # when matched, gnss row will plus 1, so minus 1 for right number
+                    # when matched, gnss row will plus 1, so minus 1 is needed for current location
                     rmc_msg = msgRMC(sht_gnss,l_rmc_name,gnss_row-1)
                     if rmc_msg != []:
                         msg.append(rmc_msg)
@@ -949,7 +872,7 @@ def sht2nmea(p_dr, p_gnss, n_type):
                    l_sbas_name != [] or l_galileo_name != [] or \
                    l_qzss_name != [] or l_beidou_name != [] or \
                    l_gsa_name != []:
-                    # when matched, gnss row will plus 1, so minus 1 for right number
+                    # when matched, gnss row will plus 1, so minus 1 is needed for current location
                     msgGSVandGSA(msg,l_gsa_name, \
                                  l_gps_name,l_glonass_name, \
                                  l_sbas_name,l_galileo_name, \
@@ -969,8 +892,8 @@ def sht2nmea(p_dr, p_gnss, n_type):
 
 print('\nXLSX to NMEA Version:',xver)
 while 1:
-    usrinput = input('\nDR.xlsx,GNSS.xlsx,nmea_type'+
-                     '\n(nmea_type:GGA/RMC/GSV/GSA or GGA+RMC,RMC+...)\n'+
+    usrinput = input('\nDR.xlsx/GNSS.xlsx,GNSS.xlsx,nmea_type(GGA/RMC/GSV/GSA)'+
+                     '\n(GGA is default option: RMC or GSV or RMC+GSV ...)\n'+
                      '\n[e to exit]: ')
     i = usrinput.rfind(',')
     j = usrinput.find(',')
@@ -982,4 +905,7 @@ while 1:
         nmea_type = nmea_type.partition(',')[2]
         sht2nmea(path_dr, path_gnss, nmea_type)
     if 'e' == usrinput:
+        # when the file is large, it take quite some time to exit the program
+        # add this 'fake' prompt to let user know the exit process is not hang
+        print('free the allocated memory...')
         break
